@@ -113,13 +113,16 @@ class BiModalNormal(object):
         self.means = [-2, 2]
         self.vars = [0.5, 0.5]
 
-        self.sample = torch.FloatTensor(2, self.arg.B, self.arg.input_size).fill_(0)
+        self.sample = torch.FloatTensor(2, self.arg.batch_size, self.arg.input_size).fill_(0)
 
     def __len__(self):
         return self.arg.M
 
     def __next__(self):
+        self.sample[0].normal_(self.means[0], self.vars[0])
+        self.sample[1].normal_(self.means[1], self.vars[1])
 
+        return self.sample
 
 
 

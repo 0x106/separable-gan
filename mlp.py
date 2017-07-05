@@ -10,7 +10,7 @@ class Generator(nn.Module):
 		super(Generator, self).__init__()
 
 		self.main = nn.Sequential(
-			nn.Linear(nz, feature_size),
+			nn.Linear(nz+input_size, feature_size),
 			nn.ReLU(True),
 			nn.Linear(feature_size, feature_size),
 			nn.ReLU(True),
@@ -19,8 +19,9 @@ class Generator(nn.Module):
 			nn.Linear(feature_size, input_size),
 		)
 
-	def forward(self, noise):
-		x = self.main(noise)
+	def forward(self, noise, class_input):
+		x = torch.cat((noise, class_input), 1)
+		x = self.main(x)
 		return x
 
 class Critic(nn.Module):
@@ -44,20 +45,23 @@ class Critic(nn.Module):
 		self.fc3 = nn.Linear(feature_size, feature_size)
 		self.fc4 = nn.Linear(feature_size, 1)
 
-		self.dropout_prob = 0.5
+	def forward(self, x, bernoulli):
+		# output = self.main(x).mean(0).view(1)
 
-	def forward(self, x):
-		output = self.main(x).mean(0).view(1)
+		x = nn.ReLU()(self.fc1(x) * bernoulli)
+		x = nn.ReLU()(self.fc2(x) * bernoulli)
+		x = nn.ReLU()(self.fc3(x) * bernoulli)
+		output = self.fc4(x).mean(0).view(1)
 
-		# x = nn.ReLU()(self.fc1(x))
-		# x = nn.ReLU()(self.fc2(x))
-		# x = nn.ReLU()(nn.Dropout(self.dropout_prob)(self.fc3(x)))
-		# x = self.fc4(x).mean(0).view(1)
+		# x = (self.fc1(x) * bernoulli)
+		# print(x)
+		# print('----------------')
+		# x = (self.fc2(x) * bernoulli)
+		# print(x)
+		# print('----------------')
+		# x = (self.fc3(x) * bernoulli)
+		# print(x)
+		# print('----------------')
+		# output = self.fc4(x).mean(0).view(1)
 
 		return output
-
-	def update_dropout_prob(self, update_factor):
-		self.dropout_prob += update_factor
-
-		if self.dropout_prob >= 1.0:
-			self.dropout_prob = 1.0
