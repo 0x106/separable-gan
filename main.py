@@ -136,33 +136,23 @@ for epoch in range(opt.niter):
                 sample = next(dataset)
                 gen_input = (( gen_input[0].copy_(sample[k].mean(0)) ).unsqueeze(0)).expand_as(gen_input)
                 noisev = Variable(noise.normal_(0, 1), volatile = True)
-
                 fake = generator(noisev, Variable(gen_input))
 
-                for n in range(opt.marginalise):
+                critic.zero_grad()
 
-                    critic.zero_grad()
+                # clamp parameters to a cube
+                for p in critic.parameters():
+                    p.data.clamp_(opt.clamp_lower, opt.clamp_upper)
 
-                    # clamp parameters to a cube
-                    for p in critic.parameters():
-                        p.data.clamp_(opt.clamp_lower, opt.clamp_upper)
+                errD_real = critic(Variable(sample[k]), Variable(bernoulli[k]))
+                errD_real.backward(one)
 
-                    # every time we call critic(x, bernoulli) we sample from the dropout
-                    # distribution of bernoulli (which is what we are marginalising over)
-                    # sample remains the same
-                    errD_real = critic(Variable(sample[k]), Variable(bernoulli[k]))
-                    errD_real.backward(one)
+                errD_fake = critic(Variable(fake.data), Variable(bernoulli[k]))
+                errD_fake.backward(mone)
 
-                    # train with fake
-                    # noise will also remain the same in this instance
-                    errD_fake = critic(Variable(fake.data), Variable(bernoulli[k]))
-                    errD_fake.backward(mone)
-                    
-                    errors[k].append((errD_real - errD_fake).data[0])
+                errors[k].append((errD_real - errD_fake).data[0])
 
-                    optimizerD.step()
-
-            # sys.exit()
+                optimizerD.step()
 
         ############################
         # (2) Update G network
