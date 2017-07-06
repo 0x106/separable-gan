@@ -108,8 +108,6 @@ def compute_errors(x, y):
 bernoulli = (torch.bernoulli(torch.FloatTensor(1, 1, opt.feature_size).fill_(0.5))).expand(1, opt.batch_size, opt.feature_size)
 bernoulli = torch.cat((bernoulli, 1 - bernoulli), 0)
 
-print(bernoulli)
-
 gen_iterations = 0
 logs = [[], [], []]
 errors = [[],[],[],[]]
@@ -148,7 +146,7 @@ for epoch in range(opt.niter):
                 fake = Variable(generator( Variable(noise.normal_(0, 1), volatile = True), Variable(gen_input) ).data )
                 errD_fake = critic(fake, Variable(bernoulli[k]))
                 errD_fake.backward(mone)
-                errD = errD_real - errD_fake
+                errors[k].append((errD_real - errD_fake).data[0])
 
                 optimizerD.step()
 
@@ -172,20 +170,18 @@ for epoch in range(opt.niter):
             errG = critic(fake, Variable(bernoulli[k]))
             errG.backward(one)
 
+            errors[k+2].append(errG.data[0])
+
             optimizerG.step()
         gen_iterations += 1
 
         print('[%d/%d][%d/%d][%d] Loss_D: %f Loss_G: %f Loss_D_real: %f Loss_D_fake %f'
-            % (epoch, opt.niter, i, len(dataset), gen_iterations,
-            errD.data[0], errG.data[0], errD_real.data[0], errD_fake.data[0]))
+                    % (epoch, opt.niter, i, len(dataset), gen_iterations,
+                        errors[0][-1],errors[1][-1], errors[2][-1], errors[3][-1]))
 
-        logs[0].append(errD.data[0])
-        logs[1].append(errG.data[0])
-
-        # plt.subplot(211)
+        plt.subplot(311)
         plt.plot(sample[0,:,0].numpy(), sample[0,:,1].numpy(), '+')
         plt.plot(sample[1,:,0].numpy(), sample[1,:,1].numpy(), '+')
-        # plt.plot(fake.data[:,0].numpy(), fake.data[:,1].numpy(), '+')
         sample = next(dataset)
         for k in range(2):
             gen_input = ((gen_input[0].copy_(sample[k].mean(0))).unsqueeze(0)).expand_as(gen_input)
@@ -195,8 +191,13 @@ for epoch in range(opt.niter):
 
             plt.plot(fake[:,0].numpy(), fake[:,1].numpy(), '+')
 
-        # plt.subplot(212)
-        # plt.plot(logs[0][-100:]); plt.plot(logs[1][-100:])
+        plt.subplot(312)
+        for k in range(2):
+            plt.plot(errors[k])
+        plt.subplot(313)
+        for k in range(2):
+            plt.plot(errors[2+k])
+
         plt.pause(0.01)
         plt.clf()
 
