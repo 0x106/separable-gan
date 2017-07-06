@@ -37,6 +37,7 @@ parser.add_argument('--experiment', default=None, help='Where to store samples a
 opt = parser.parse_args()
 
 opt.M = 100
+opt.marginalise = 10
 
 print(opt)
 
@@ -131,24 +132,35 @@ for epoch in range(opt.niter):
             i, j = i+1, j+1
 
             for k in range(2):
-                critic.zero_grad()
-
-                # clamp parameters to a cube
-                for p in critic.parameters():
-                    p.data.clamp_(opt.clamp_lower, opt.clamp_upper)
 
                 sample = next(dataset)
-                errD_real = critic(Variable(sample[k]), Variable(bernoulli[k]))
-                errD_real.backward(one)
-
-                # train with fake
                 gen_input = (( gen_input[0].copy_(sample[k].mean(0)) ).unsqueeze(0)).expand_as(gen_input)
-                fake = Variable(generator( Variable(noise.normal_(0, 1), volatile = True), Variable(gen_input) ).data )
-                errD_fake = critic(fake, Variable(bernoulli[k]))
-                errD_fake.backward(mone)
-                errors[k].append((errD_real - errD_fake).data[0])
+                noisev = Variable(noise.normal_(0, 1), volatile = True)
 
-                optimizerD.step()
+                fake = generator(noisev, Variable(gen_input))
+
+                for n in range(opt.marginalise):
+
+                    critic.zero_grad()
+
+                    # clamp parameters to a cube
+                    for p in critic.parameters():
+                        p.data.clamp_(opt.clamp_lower, opt.clamp_upper)
+
+                    # every time we call critic(x, bernoulli) we sample from the dropout
+                    # distribution of bernoulli (which is what we are marginalising over)
+                    # sample remains the same
+                    errD_real = critic(Variable(sample[k]), Variable(bernoulli[k]))
+                    errD_real.backward(one)
+
+                    # train with fake
+                    # noise will also remain the same in this instance
+                    errD_fake = critic(Variable(fake.data), Variable(bernoulli[k]))
+                    errD_fake.backward(mone)
+                    
+                    errors[k].append((errD_real - errD_fake).data[0])
+
+                    optimizerD.step()
 
             # sys.exit()
 

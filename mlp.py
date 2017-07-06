@@ -53,7 +53,13 @@ class Critic(nn.Module):
 
 		#                                              ON    OFF
 		# the probability a unit is OFF (i.e 0.1 --> [0.95, 0.05])
-		self.drop_prob = 0.1
+		self.drop_prob = 0.4
+
+		# 0.1 --> 0.05 - 0.95
+		# 0.2 --> 0.1 - 0.9
+		# 0.3 --> 0.15 - 0.85
+		# 0.4 --> 0.2 - 0.8
+		# 0.5 --> 0.25 - 0.75
 
 	def forward(self, x, bernoulli):
 
