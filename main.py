@@ -26,7 +26,7 @@ parser.add_argument('--dataroot', help='path to dataset')
 parser.add_argument('--batch_size', type=int, default=100, help='input batch size')
 parser.add_argument('--input_size', type=int, default=2, help='the height / width of the input image to network')
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
-parser.add_argument('--feature_size', type=int, default=512)
+parser.add_argument('--feature_size', type=int, default=256)
 parser.add_argument('--niter', type=int, default=500, help='number of epochs to train for')
 parser.add_argument('--lr', type=float, default=0.00001, help='learning rate for Generator, default=0.00005')
 parser.add_argument('--cuda'  , action='store_true', help='enables cuda')
@@ -78,7 +78,8 @@ critic.apply(weights_init)
 print(critic)
 
 # dataset = data.Circle2D(opt)
-dataset = data.BiModalNormal(opt)
+# dataset = data.BiModalNormal(opt)
+dataset = data.MultiModalNormal(opt)
 
 noise = torch.FloatTensor(opt.batch_size, nz)
 fixed_noise = torch.FloatTensor(opt.batch_size, nz).normal_(0, 1)
@@ -96,24 +97,42 @@ if opt.cuda:
 optimizerD = optim.RMSprop(critic.parameters(), lr = opt.lr)
 optimizerG = optim.RMSprop(generator.parameters(), lr = opt.lr)
 
-def compute_errors(x, y):
+labels = torch.ByteTensor(opt.feature_size).copy_(torch.from_numpy(np.random.randint(4, size=(opt.feature_size))))
 
-    errors = [0,0,0,0]
-    errors[0] = abs(x[:,0].mean() - y[:,0].mean())
-    errors[1] = abs(x[:,1].mean() - y[:,1].mean())
-    errors[2] = abs(x[:,0].std() - y[:,0].std())
-    errors[3] = abs(x[:,1].std() - y[:,1].std())
+bernoulli = torch.FloatTensor(1, opt.feature_size).fill_(0.)
+bernoulli = (bernoulli[0].copy_(labels.eq(0))).expand(1, opt.batch_size, opt.feature_size)
 
-    return errors
+for i in range(1, 4):
+    temp = torch.FloatTensor(1, opt.feature_size).fill_(0.)
+    temp = (temp[0].copy_(labels.eq(i))).expand(1, opt.batch_size, opt.feature_size)
+    bernoulli = torch.cat((bernoulli, temp), 0)
 
-bernoulli = (torch.bernoulli(torch.FloatTensor(1, 1, opt.feature_size).fill_(0.5))).expand(1, opt.batch_size, opt.feature_size)
-bernoulli = torch.cat((bernoulli, 1 - bernoulli), 0)
+# bernoulli = (torch.bernoulli(torch.FloatTensor(1, 1, opt.feature_size).fill_(0.5))).expand(1, opt.batch_size, opt.feature_size)
+# bernoulli = torch.cat((bernoulli, 1 - bernoulli), 0)
+
+# train autoencoder
+criterion = nn.BCELoss()
+autoencoder = mlp.Autoencoder(opt.input_size, nz, feature_size)
+optimiser = optim.Adam(autoencoder.parameters(), lr = 0.002)
+
+for i in range(100):
+
+    sample = dataset.next_mixed()
+    autoencoder.zero_grad()
+
+    binary, decoded = autoencoder(Variable(sample))
+
+    loss = criterion(nn.Sigmoid()(decoded), nn.Sigmoid()(Variable(sample)))
+
+    loss.backward()
+
+    optimiser.step()
+
+    print(i, loss.data[0])
 
 gen_iterations = 0
-logs = [[], [], []]
-errors = [[],[],[],[]]
+errors = [[],[],[],[], [],[],[],[]]
 for epoch in range(opt.niter):
-    # data_iter = iter(dataset)
     i = 0
     while i < len(dataset):
         ############################
@@ -131,9 +150,10 @@ for epoch in range(opt.niter):
         while j < Diters and i < len(dataset):
             i, j = i+1, j+1
 
-            for k in range(2):
+            sample = next(dataset)
 
-                sample = next(dataset)
+            for k in range(4):
+
                 gen_input = (( gen_input[0].copy_(sample[k].mean(0)) ).unsqueeze(0)).expand_as(gen_input)
                 noisev = Variable(noise.normal_(0, 1), volatile = True)
                 fake = generator(noisev, Variable(gen_input))
@@ -162,7 +182,7 @@ for epoch in range(opt.niter):
 
         sample = next(dataset)
 
-        for k in range(2):
+        for k in range(4):
 
             generator.zero_grad()
 
@@ -172,20 +192,24 @@ for epoch in range(opt.niter):
             errG = critic(fake, Variable(bernoulli[k]))
             errG.backward(one)
 
-            errors[k+2].append(errG.data[0])
+            errors[k+4].append(errG.data[0])
 
             optimizerG.step()
         gen_iterations += 1
 
-        print('[%d/%d][%d/%d][%d] Loss_D: %f Loss_G: %f Loss_D_real: %f Loss_D_fake %f'
-                    % (epoch, opt.niter, i, len(dataset), gen_iterations,
-                        errors[0][-1],errors[1][-1], errors[2][-1], errors[3][-1]))
+        print('[{0}/{1}][{2}/{3}][{4}] '.format(epoch, opt.niter, i, len(dataset), gen_iterations), end='')
+        for idx in range(len(errors)):
+            print(errors[idx][-1], " ", end='')
+        print("")
 
         plt.subplot(311)
         plt.plot(sample[0,:,0].numpy(), sample[0,:,1].numpy(), '+')
         plt.plot(sample[1,:,0].numpy(), sample[1,:,1].numpy(), '+')
+        plt.plot(sample[2,:,0].numpy(), sample[2,:,1].numpy(), '+')
+        plt.plot(sample[3,:,0].numpy(), sample[3,:,1].numpy(), '+')
+
         sample = next(dataset)
-        for k in range(2):
+        for k in range(4):
             gen_input = ((gen_input[0].copy_(sample[k].mean(0))).unsqueeze(0)).expand_as(gen_input)
             gen_inputv = Variable(gen_input)
 
@@ -194,11 +218,11 @@ for epoch in range(opt.niter):
             plt.plot(fake[:,0].numpy(), fake[:,1].numpy(), '+')
 
         plt.subplot(312)
-        for k in range(2):
+        for k in range(4):
             plt.plot(errors[k])
         plt.subplot(313)
-        for k in range(2):
-            plt.plot(errors[2+k])
+        for k in range(4):
+            plt.plot(errors[4+k])
 
         plt.pause(0.01)
         plt.clf()
@@ -206,3 +230,25 @@ for epoch in range(opt.niter):
     # do checkpointing
     # torch.save(netG.state_dict(), '{0}/netG_epoch_{1}.pth'.format(opt.experiment, epoch))
     # torch.save(netD.state_dict(), '{0}/netD_epoch_{1}.pth'.format(opt.experiment, epoch))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#

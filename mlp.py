@@ -75,3 +75,32 @@ class Critic(nn.Module):
 		drop = torch.bernoulli(probs)
 		layer = layer * drop
 		return layer
+
+class Autoencoder(nn.Module):
+	def __init__(self, input_size, nz, feature_size):
+		super(Autoencoder, self).__init__()
+
+		self.encoder = nn.Sequential(
+			nn.Linear(input_size, feature_size),
+			nn.ReLU(True),
+			nn.Linear(feature_size, feature_size*2),
+			nn.ReLU(True),
+			nn.Linear(feature_size*2, feature_size),
+		)
+
+		self.decoder = nn.Sequential(
+			nn.Linear(feature_size, feature_size*2),
+			nn.ReLU(True),
+			nn.Linear(feature_size*2, feature_size),
+			nn.ReLU(True),
+			nn.Linear(feature_size, input_size),
+		)
+
+	def forward(self, x):
+
+		encoded = self.encoder(x)
+		decoded = self.decoder(encoded)
+
+		binary = torch.round(nn.Sigmoid()(encoded))
+
+		return binary, decoded

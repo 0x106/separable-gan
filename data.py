@@ -102,8 +102,6 @@ class Circle2D():
 
 		return output
 
-
-
 class BiModalNormal(object):
     """2D BiModalNormal Sample Generator"""
     def __init__(self, arg):
@@ -124,12 +122,49 @@ class BiModalNormal(object):
 
         return self.sample
 
+class MultiModalNormal(object):
+    """MultiModalNormal Sample Generator"""
+    def __init__(self, arg):
+        super(MultiModalNormal, self).__init__()
 
+        self.arg = arg
 
+        self.N = 4
 
+        self.mean = 2
+        self.var = 0.5
 
+        self.sample = torch.FloatTensor(self.N, self.arg.batch_size, self.arg.input_size).fill_(0)
 
+        self.mixed = torch.FloatTensor(self.arg.batch_size, self.arg.input_size).fill_(0)
 
+    def __len__(self):
+        return self.arg.M
+
+    def __next__(self):
+        self.sample[0].normal_(self.mean, self.var)
+        self.sample[1].normal_(-self.mean, self.var)
+        self.sample[2].normal_(0,self.var)
+        self.sample[3].normal_(0,self.var)
+
+        self.sample[2,:,0] += self.mean
+        self.sample[2,:,1] -= self.mean
+
+        self.sample[3,:,0] -= self.mean
+        self.sample[3,:,1] += self.mean
+
+        return self.sample
+
+    def next_mixed(self):
+
+        sample = next(self)
+        B = self.arg.batch_size // self.N
+
+        for i in range(self.N):
+            select = torch.randperm(self.arg.batch_size)[:B]
+            self.mixed[i*B:(i+1)*B].copy_(sample[i][select])
+
+        return self.mixed
 
 
 
