@@ -24,7 +24,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', help='cifar10 | lsun | imagenet | folder | lfw ')
 parser.add_argument('--dataroot', help='path to dataset')
 parser.add_argument('--batch_size', type=int, default=100, help='input batch size')
-parser.add_argument('--input_size', type=int, default=2, help='the height / width of the input image to network')
+parser.add_argument('--input_size', type=int, default=28, help='the height / width of the input image to network')
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
 parser.add_argument('--feature_size', type=int, default=256)
 parser.add_argument('--niter', type=int, default=500, help='number of epochs to train for')
@@ -36,10 +36,16 @@ parser.add_argument('--Diters', type=int, default=5, help='number of D iters per
 parser.add_argument('--experiment', default=None, help='Where to store samples and models')
 opt = parser.parse_args()
 
+opt.path = os.getcwd()[:-3]
+
+opt.experiment = opt.path + "output/"
+opt.dataroot = opt.path + "data/"
+
+# print(opt.dataroot)
+# sys.exit()
+
 opt.M = 100
 opt.marginalise = 10
-
-print(opt)
 
 if opt.experiment is None:
     opt.experiment = 'samples'
@@ -54,6 +60,14 @@ cudnn.benchmark = True
 
 if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
+
+print(opt)
+
+import util
+# util.random_projection()
+util.random_projection_mnist(opt)
+
+sys.exit()
 
 nz = int(opt.nz)
 feature_size = int(opt.feature_size)
@@ -112,23 +126,60 @@ for i in range(1, 4):
 
 # train autoencoder
 criterion = nn.BCELoss()
-autoencoder = mlp.Autoencoder(opt.input_size, nz, feature_size)
+# autoencoder = mlp.Autoencoder(opt.input_size, nz, feature_size)
+autoencoder = mlp.ClassifierEncoder(opt.input_size, nz, feature_size)
 optimiser = optim.Adam(autoencoder.parameters(), lr = 0.002)
 
-for i in range(100):
+classifier_criterion = nn.CrossEntropyLoss()
+# classifier_optimiser = optim.Adam(autoencoder.parameters(), lr = 0.002)
 
-    sample = dataset.next_mixed()
+logs = [[], []]
+for i in range(0):
+
+    sample, label = dataset.next_mixed()
     autoencoder.zero_grad()
 
     binary, decoded = autoencoder(Variable(sample))
 
-    loss = criterion(nn.Sigmoid()(decoded), nn.Sigmoid()(Variable(sample)))
+    decoded_loss = criterion(nn.Sigmoid()(decoded[:, :-4]), nn.Sigmoid()(Variable(sample)))
+    classifier_loss = classifier_criterion(decoded[:, -4:], Variable(label))
 
-    loss.backward()
+    decoded_loss.backward(retain_variables=True)
+    classifier_loss.backward()
 
     optimiser.step()
 
-    print(i, loss.data[0])
+    logs[0].append(decoded_loss.data[0])
+    logs[1].append(classifier_loss.data[0])
+
+    print(i, decoded_loss.data[0], classifier_loss.data[0])
+
+plt.plot(logs[0])
+plt.plot(logs[1])
+plt.pause(10)
+
+from sklearn.manifold import TSNE
+tsne_model = TSNE(n_components=2, random_state=0)
+np.set_printoptions(suppress=True)
+
+sample = next(dataset)
+b0, _ = autoencoder(Variable(sample[0]))
+b1, _ = autoencoder(Variable(sample[1]))
+b2, _ = autoencoder(Variable(sample[2]))
+b3, _ = autoencoder(Variable(sample[3]))
+
+binary = torch.cat((b0, b1, b2, b3), 0)
+
+output = tsne_model.fit_transform(binary.data.numpy())
+
+plt.plot(output[:100,0], output[:100,1], '+')
+plt.plot(output[100:200,0], output[100:200,1], '+')
+plt.plot(output[200:300,0], output[200:300,1], '+')
+plt.plot(output[300:400,0], output[300:400,1], '+')
+plt.pause(1000)
+
+
+sys.exit()
 
 gen_iterations = 0
 errors = [[],[],[],[], [],[],[],[]]

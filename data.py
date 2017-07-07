@@ -4,6 +4,8 @@ import os, sys, math
 import torchvision.datasets as dset
 import torchvision.transforms as transforms
 
+import util
+
 class Circle2D():
 
 	def __init__(self, opt):
@@ -103,71 +105,140 @@ class Circle2D():
 		return output
 
 class BiModalNormal(object):
-    """2D BiModalNormal Sample Generator"""
-    def __init__(self, arg):
-        super(BiModalNormal, self).__init__()
-        self.arg = arg
+	"""2D BiModalNormal Sample Generator"""
+	def __init__(self, arg):
+		super(BiModalNormal, self).__init__()
+		self.arg = arg
 
-        self.means = [-2, 2]
-        self.vars = [0.5, 0.5]
+		self.means = [-2, 2]
+		self.vars = [0.5, 0.5]
 
-        self.sample = torch.FloatTensor(2, self.arg.batch_size, self.arg.input_size).fill_(0)
+		self.sample = torch.FloatTensor(2, self.arg.batch_size, self.arg.input_size).fill_(0)
 
-    def __len__(self):
-        return self.arg.M
+	def __len__(self):
+		return self.arg.M
 
-    def __next__(self):
-        self.sample[0].normal_(self.means[0], self.vars[0])
-        self.sample[1].normal_(self.means[1], self.vars[1])
+	def __next__(self):
+		self.sample[0].normal_(self.means[0], self.vars[0])
+		self.sample[1].normal_(self.means[1], self.vars[1])
 
-        return self.sample
+		return self.sample
 
 class MultiModalNormal(object):
-    """MultiModalNormal Sample Generator"""
-    def __init__(self, arg):
-        super(MultiModalNormal, self).__init__()
+	"""MultiModalNormal Sample Generator"""
+	def __init__(self, arg):
+		super(MultiModalNormal, self).__init__()
 
-        self.arg = arg
+		self.arg = arg
 
-        self.N = 4
+		self.N = 4
 
-        self.mean = 2
-        self.var = 0.5
+		self.mean = 2
+		self.var = 0.5
 
-        self.sample = torch.FloatTensor(self.N, self.arg.batch_size, self.arg.input_size).fill_(0)
+		self.sample = torch.FloatTensor(self.N, self.arg.batch_size, self.arg.input_size).fill_(0)
 
-        self.mixed = torch.FloatTensor(self.arg.batch_size, self.arg.input_size).fill_(0)
-
-    def __len__(self):
-        return self.arg.M
-
-    def __next__(self):
-        self.sample[0].normal_(self.mean, self.var)
-        self.sample[1].normal_(-self.mean, self.var)
-        self.sample[2].normal_(0,self.var)
-        self.sample[3].normal_(0,self.var)
-
-        self.sample[2,:,0] += self.mean
-        self.sample[2,:,1] -= self.mean
-
-        self.sample[3,:,0] -= self.mean
-        self.sample[3,:,1] += self.mean
-
-        return self.sample
-
-    def next_mixed(self):
-
-        sample = next(self)
-        B = self.arg.batch_size // self.N
-
-        for i in range(self.N):
-            select = torch.randperm(self.arg.batch_size)[:B]
-            self.mixed[i*B:(i+1)*B].copy_(sample[i][select])
-
-        return self.mixed
+		self.mixed = torch.FloatTensor(self.arg.batch_size, self.arg.input_size).fill_(0)
+		self.label = torch.LongTensor(self.arg.batch_size).fill_(0)
 
 
+	def __len__(self):
+		return self.arg.M
 
+	def __next__(self):
+		self.sample[0].normal_(self.mean, self.var)
+		self.sample[1].normal_(-self.mean, self.var)
+		self.sample[2].normal_(0,self.var)
+		self.sample[3].normal_(0,self.var)
+
+		self.sample[2,:,0] += self.mean
+		self.sample[2,:,1] -= self.mean
+
+		self.sample[3,:,0] -= self.mean
+		self.sample[3,:,1] += self.mean
+
+		return self.sample
+
+	def next_mixed(self):
+
+		sample = next(self)
+		B = self.arg.batch_size // self.N
+
+		for i in range(self.N):
+			select = torch.randperm(self.arg.batch_size)[:B]
+			self.mixed[i*B:(i+1)*B].copy_(sample[i][select])
+			self.label[i*B:(i+1)*B].fill_(i)
+
+		shuffle = util.shuffle(self.arg.batch_size)
+
+		self.mixed = self.mixed[shuffle]
+		self.label = self.label[shuffle]
+
+		return self.mixed, self.label
+
+class MNIST():
+	def __init__(self, opt):
+
+		self.B = opt.batch_size
+		self.cuda = opt.cuda
+
+		data_path = opt.dataroot
+		if self.cuda:
+			data_path = '/input'
+
+		self.trData = dset.MNIST(data_path, train=True, download=True,
+					   transform=transforms.Compose([
+						   transforms.ToTensor(),
+						   transforms.Normalize((0.1307,), (0.3081,))
+					   ]))
+
+		self.testData = dset.MNIST(data_path, train=False, transform=transforms.Compose([
+						   transforms.ToTensor(),
+						   transforms.Normalize((0.1307,), (0.3081,))
+					   ]))
+
+		self.train_loader = torch.utils.data.DataLoader(self.trData, batch_size=self.B, shuffle=True)
+		self.test_loader = torch.utils.data.DataLoader(self.testData, batch_size=len(self.testData), shuffle=True)
+
+		self.train_iter = iter(self.train_loader)
+		self.test_iter = iter(self.test_loader)
+
+		self.num_examples = len(self.trData)
+		self.labels = [ [] for i in range(10) ]
+
+		for i in range(self.num_examples):
+			self.labels[self.trData[i][1]].append(i)
+
+		self.batch = torch.FloatTensor(self.B, 1, opt.input_size, opt.input_size)
+
+	def __len__(self):
+		return len(self.train_loader)
+
+	def next(self):
+		try:
+			output = self.train_iter.next()
+		except:
+			self.train_iter = iter(self.train_loader)
+			output = self.train_iter.next()
+
+		return output
+
+	def next_test(self):
+		try:
+			output = self.test_iter.next()
+		except:
+			self.test_iter = iter(self.test_loader)
+			output = self.test_iter.next()
+
+		return output
+
+	def next_batch_from_class(self, selector):
+
+		selection = np.random.permutation(len(self.labels[selector]))[:self.B]
+		for i in range(self.B):
+			self.batch[i].copy_(self.trData[self.labels[selector][selection[i]]][0])
+
+		return (self.batch.view(self.batch.size(0), self.batch.size(2) * self.batch.size(3))).add(-1.0)
 
 
 

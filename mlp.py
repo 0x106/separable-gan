@@ -104,3 +104,33 @@ class Autoencoder(nn.Module):
 		binary = torch.round(nn.Sigmoid()(encoded))
 
 		return binary, decoded
+
+
+class ClassifierEncoder(nn.Module):
+	def __init__(self, input_size, nz, feature_size):
+		super(ClassifierEncoder, self).__init__()
+
+		self.encoder = nn.Sequential(
+			nn.Linear(input_size, feature_size),
+			nn.ReLU(True),
+			nn.Linear(feature_size, feature_size*2),
+			nn.ReLU(True),
+			nn.Linear(feature_size*2, feature_size),
+		)
+
+		self.decoder = nn.Sequential(
+			nn.Linear(feature_size, feature_size*2),
+			nn.ReLU(True),
+			nn.Linear(feature_size*2, feature_size),
+			nn.ReLU(True),
+			nn.Linear(feature_size, input_size + 4),
+		)
+
+	def forward(self, x):
+
+		encoded = self.encoder(x)
+		decoded = self.decoder(encoded)
+
+		binary = torch.round(nn.Sigmoid()(encoded))
+
+		return binary, decoded
