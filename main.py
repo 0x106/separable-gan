@@ -64,8 +64,8 @@ if torch.cuda.is_available() and not opt.cuda:
 print(opt)
 
 import util
-# util.random_projection()
-util.random_projection_mnist(opt)
+util.random_projection()
+# util.random_projection_mnist(opt)
 
 sys.exit()
 

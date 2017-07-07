@@ -66,32 +66,30 @@ def random_projection_mnist(opt):
 
     mnist = batches[0]
     for i in range(1,10):
-        print(batches[i].size())
         mnist = torch.cat((mnist, batches[i]), 0)
-
-    print(mnist.size())
-
     output = tsne_model.fit_transform(mnist.numpy())
 
-    print(output)
+    print(mnist)
 
-    print(output.shape)
-    # sys.exit()
-    i = 0
-    # print(output[i*100:(i+1)*100, 0])
-    # print(output[i*100:(i+1)*100, 1])
-    # plt.plot(output[i*100:(i+1)*100, 0], output[i*100:(i+1)*100, 1], '+')
+    # for i in range(10):
+    #     plt.plot(output[i*100:(i+1)*100, 0], output[i*100:(i+1)*100, 1], '+')
+    #
+    # plt.pause(10000)
 
-    # plt.plot(output[:,0], output[:,1], '+')
+    M = torch.FloatTensor(784, 1024).normal_(0,200)
+
+    embedding = [torch.round(sigmoid(Variable(torch.mm(batches[i], M)))) for i in range(10)]
+
+    mnist = embedding[0]
+    for i in range(1,10):
+        mnist = torch.cat((mnist, embedding[i]), 0)
+    print(mnist)
+    output = tsne_model.fit_transform(mnist.data.numpy())
 
     for i in range(10):
         plt.plot(output[i*100:(i+1)*100, 0], output[i*100:(i+1)*100, 1], '+')
 
     plt.pause(10000)
-
-    M = torch.FloatTensor(784, 1024).normal_(0,200)
-
-    embedding = [torch.round(sigmoid(Variable(torch.mm(batches[i], M)))) for i in range(10)]
 
     print(embedding[0][:10])
     print(embedding[4][:10])
@@ -124,14 +122,14 @@ def random_projection():
     idx, idx2 = -10, -5
     for i in range(100):
 
-        # M = torch.FloatTensor(n_in, n_out).normal_(idx2,200)
-        x = torch.FloatTensor(N, n_in).normal_(idx2,1)#.add(20)# + offset
-        y1 = torch.round(nn.Sigmoid()(Variable(torch.mm(x, M))))
+        M = torch.FloatTensor(n_in, n_out).normal_(idx,200)
+        x1 = torch.FloatTensor(N, n_in).normal_(idx,1)#.add(20)# + offset
+        y1 = torch.round(nn.Sigmoid()(Variable(torch.mm(x1, M))))
         h1 = hamming_distance(y1, y1)
 
-        # M = torch.FloatTensor(n_in, n_out).normal_(idx,200)
-        x = torch.FloatTensor(N, n_in).normal_(idx,1)#.add(20)# + offset
-        y2 = torch.round(nn.Sigmoid()(Variable(torch.mm(x, M))))
+        M = torch.FloatTensor(n_in, n_out).normal_(idx2,200)
+        x2 = torch.FloatTensor(N, n_in).normal_(idx2,1)#.add(20)# + offset
+        y2 = torch.round(nn.Sigmoid()(Variable(torch.mm(x2, M))))
         h2 = hamming_distance(y2, y2)
 
         h3 = hamming_distance(y1, y2)
