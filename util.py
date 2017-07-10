@@ -153,15 +153,23 @@ def random_projection():
     plt.pause(100)
     sys.exit()
 
-def compute_g(F, A, E, G, q):
+def compute_g(h, hp, hn, A, E, G, q):
+
+    print(h.size(), hp.size(), hn.size())
+
+    F = torch.cat((h.data, hp.data, hn.data), 0)
+    print(F.size())
 
     C = torch.mm(A, F).transpose(1,0) + E
+    print(C.size())
 
     config = C.max(1)[1]
     for i in range(q):
         G[:,i].copy_(A[config[i]])
 
-    return G
+    print(G)
+
+    return Variable(G[0].unsqueeze(0)), Variable(G[1].unsqueeze(0)), Variable(G[2].unsqueeze(0))
 
 def hdml(arg, dataset):
     plt.ion()
@@ -192,41 +200,26 @@ def hdml(arg, dataset):
 
     for epoch in range(arg.niter):
 
-        triplet = dataset.next()
-
         network.zero_grad()
 
-        # output = torch.cat((network(Variable(triplet[0])),
-        #                     network(Variable(triplet[1])),
-        #                     network(Variable(triplet[2]))), 0)
+        triplet = dataset.next()
 
-        base = network(Variable(triplet[0]))
-        positive = network(Variable(triplet[1]))
-        negative = network(Variable(triplet[2]))
+        b = network(Variable(triplet[0]))
+        bp = network(Variable(triplet[1]))
+        bn = network(Variable(triplet[2]))
 
-        # h_est = (torch.sign(output) + 1) / 2
-        # g_est = Variable((compute_g(output.data, A, E, G, q) + 1) / 2)
+        h = torch.sign(b)
+        hp = torch.sign(bp)
+        hn = torch.sign(bn)
 
-        h_est_base = torch.sign(output)
-        g_est_base = Variable(compute_g(base.data, A, E, G, q))
+        g, gp, gn = compute_g(b, bp, bn, A, E, G, q)
 
-        h_est_positive = torch.sign(output)
-        g_est_positive = Variable(compute_g(base.data, A, E, G, q))
-
-        h_est_negative = torch.sign(output)
-        g_est_negative = Variable(compute_g(base.data, A, E, G, q))
-
-        # loss = nn.L1Loss()(h_est, g_est)
-        # loss.backward()
+        b.backward((h-g).data)
+        bp.backward((hp-gp).data)
+        bn.backward((hn-gn).data)
 
         optimiser.step()
 
-        print("{0} - {1}".format(epoch, loss.data[0]))
+        print("{0}".format(epoch))
 
-        #
-        #
-        # plt.plot(sample[0,:,0].numpy(), sample[0,:,1].numpy(),'+')
-        # plt.plot(sample[1,:,0].numpy(), sample[1,:,1].numpy(),'+')
-        #
-        # plt.pause(0.01)
-        # plt.clf()
+        sys.exit()

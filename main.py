@@ -23,7 +23,7 @@ import mlp, data, util
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', help='cifar10 | lsun | imagenet | folder | lfw ')
 parser.add_argument('--dataroot', help='path to dataset')
-parser.add_argument('--batch_size', type=int, default=10, help='input batch size')
+parser.add_argument('--batch_size', type=int, default=1, help='input batch size')
 parser.add_argument('--input_size', type=int, default=2, help='the height / width of the input image to network')
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
 parser.add_argument('--feature_size', type=int, default=10)
