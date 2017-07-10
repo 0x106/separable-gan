@@ -41,9 +41,6 @@ opt.path = os.getcwd()[:-3]
 opt.experiment = opt.path + "output/"
 opt.dataroot = opt.path + "data/"
 
-# print(opt.dataroot)
-# sys.exit()
-
 opt.M = 100
 opt.marginalise = 10
 
@@ -62,12 +59,6 @@ if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
 print(opt)
-
-import util
-util.random_projection()
-# util.random_projection_mnist(opt)
-
-sys.exit()
 
 nz = int(opt.nz)
 feature_size = int(opt.feature_size)
@@ -92,8 +83,11 @@ critic.apply(weights_init)
 print(critic)
 
 # dataset = data.Circle2D(opt)
-# dataset = data.BiModalNormal(opt)
-dataset = data.MultiModalNormal(opt)
+dataset = data.BiModalNormal(opt)
+# dataset = data.MultiModalNormal(opt)
+
+util.hdml(dataset)
+sys.exit()
 
 noise = torch.FloatTensor(opt.batch_size, nz)
 fixed_noise = torch.FloatTensor(opt.batch_size, nz).normal_(0, 1)
@@ -123,63 +117,6 @@ for i in range(1, 4):
 
 # bernoulli = (torch.bernoulli(torch.FloatTensor(1, 1, opt.feature_size).fill_(0.5))).expand(1, opt.batch_size, opt.feature_size)
 # bernoulli = torch.cat((bernoulli, 1 - bernoulli), 0)
-
-# train autoencoder
-criterion = nn.BCELoss()
-# autoencoder = mlp.Autoencoder(opt.input_size, nz, feature_size)
-autoencoder = mlp.ClassifierEncoder(opt.input_size, nz, feature_size)
-optimiser = optim.Adam(autoencoder.parameters(), lr = 0.002)
-
-classifier_criterion = nn.CrossEntropyLoss()
-# classifier_optimiser = optim.Adam(autoencoder.parameters(), lr = 0.002)
-
-logs = [[], []]
-for i in range(0):
-
-    sample, label = dataset.next_mixed()
-    autoencoder.zero_grad()
-
-    binary, decoded = autoencoder(Variable(sample))
-
-    decoded_loss = criterion(nn.Sigmoid()(decoded[:, :-4]), nn.Sigmoid()(Variable(sample)))
-    classifier_loss = classifier_criterion(decoded[:, -4:], Variable(label))
-
-    decoded_loss.backward(retain_variables=True)
-    classifier_loss.backward()
-
-    optimiser.step()
-
-    logs[0].append(decoded_loss.data[0])
-    logs[1].append(classifier_loss.data[0])
-
-    print(i, decoded_loss.data[0], classifier_loss.data[0])
-
-plt.plot(logs[0])
-plt.plot(logs[1])
-plt.pause(10)
-
-from sklearn.manifold import TSNE
-tsne_model = TSNE(n_components=2, random_state=0)
-np.set_printoptions(suppress=True)
-
-sample = next(dataset)
-b0, _ = autoencoder(Variable(sample[0]))
-b1, _ = autoencoder(Variable(sample[1]))
-b2, _ = autoencoder(Variable(sample[2]))
-b3, _ = autoencoder(Variable(sample[3]))
-
-binary = torch.cat((b0, b1, b2, b3), 0)
-
-output = tsne_model.fit_transform(binary.data.numpy())
-
-plt.plot(output[:100,0], output[:100,1], '+')
-plt.plot(output[100:200,0], output[100:200,1], '+')
-plt.plot(output[200:300,0], output[200:300,1], '+')
-plt.plot(output[300:400,0], output[300:400,1], '+')
-plt.pause(1000)
-
-
-sys.exit()
 
 gen_iterations = 0
 errors = [[],[],[],[], [],[],[],[]]
@@ -302,4 +239,5 @@ for epoch in range(opt.niter):
 
 
 
+#
 #
