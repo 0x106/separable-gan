@@ -115,6 +115,8 @@ class BiModalNormal(object):
 
 		self.sample = torch.FloatTensor(2, self.arg.batch_size, self.arg.input_size).fill_(0)
 
+		self.sample = torch.FloatTensor(3, self.arg.batch_size, self.arg.input_size).fill_(0)
+
 	def __len__(self):
 		return self.arg.M
 
@@ -123,6 +125,22 @@ class BiModalNormal(object):
 		self.sample[1].normal_(self.means[1], self.vars[1])
 
 		return self.sample
+
+	def next(self):
+		self.sample[0].normal_(self.means[0], self.vars[0])
+		self.sample[1].normal_(self.means[1], self.vars[1])
+
+		return self.sample
+
+	def next_triplet(self):
+
+		label = np.random.randint(2)
+
+		self.triplet[0].normal_(self.means[label], self.vars[label])
+		self.triplet[1].normal_(self.means[label], self.vars[label])
+		self.triplet[2].normal_(self.means[1 - label], self.vars[1 - label])
+
+		return self.triplet
 
 class MultiModalNormal(object):
 	"""MultiModalNormal Sample Generator"""

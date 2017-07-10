@@ -28,10 +28,13 @@
 
 import torch
 import torch.nn as nn
+import torch.optim as optim
 from torch.autograd import Variable
 import numpy as np
 import os, sys, math
 import matplotlib.pyplot as plt
+
+import mlp
 
 def shuffle(size):
     retval = torch.LongTensor(size).copy_(torch.from_numpy(np.random.permutation(size)))
@@ -150,6 +153,80 @@ def random_projection():
     plt.pause(100)
     sys.exit()
 
+def compute_g(F, A, E, G, q):
 
+    C = torch.mm(A, F).transpose(1,0) + E
 
-def hdml():
+    config = C.max(1)[1]
+    for i in range(q):
+        G[:,i].copy_(A[config[i]])
+
+    return G
+
+def hdml(arg, dataset):
+    plt.ion()
+
+    network = mlp.HammingEncoder(int(arg.input_size), int(arg.nz), int(arg.feature_size))
+    optimiser = optim.Adam(network.parameters(), lr = arg.lr)
+
+    print(network)
+
+    q = arg.feature_size
+
+    A = torch.FloatTensor(8,3).fill_(0)
+    E = torch.FloatTensor(q, 8).fill_(0)
+    G = torch.FloatTensor(3, q).fill_(0)
+
+    A[0,0] = -1; A[0,1] = -1; A[0,2] = -1
+    A[1,0] = -1; A[1,1] = -1; A[1,2] = 1
+    A[2,0] = -1; A[2,1] = 1; A[2,2] = -1
+    A[3,0] = -1; A[3,1] = 1; A[3,2] = 1
+    A[4,0] = 1; A[4,1] = -1; A[4,2] = -1
+    A[5,0] = 1; A[5,1] = -1; A[5,2] = 1
+    A[6,0] = 1; A[6,1] = 1; A[6,2] = -1
+    A[7,0] = 1; A[7,1] = 1; A[7,2] = 1
+
+    E[0,0] = 0; E[0,1] = -1; E[0,2] =  1; E[0,3] = 0;
+    E[0,4] = 0; E[0,5] =  1; E[0,6] = -1; E[0,7] = 0;
+    E = (E[0].unsqueeze(0)).expand_as(E)
+
+    for epoch in range(arg.niter):
+
+        triplet = dataset.next()
+
+        network.zero_grad()
+
+        # output = torch.cat((network(Variable(triplet[0])),
+        #                     network(Variable(triplet[1])),
+        #                     network(Variable(triplet[2]))), 0)
+
+        base = network(Variable(triplet[0]))
+        positive = network(Variable(triplet[1]))
+        negative = network(Variable(triplet[2]))
+
+        # h_est = (torch.sign(output) + 1) / 2
+        # g_est = Variable((compute_g(output.data, A, E, G, q) + 1) / 2)
+
+        h_est_base = torch.sign(output)
+        g_est_base = Variable(compute_g(base.data, A, E, G, q))
+
+        h_est_positive = torch.sign(output)
+        g_est_positive = Variable(compute_g(base.data, A, E, G, q))
+
+        h_est_negative = torch.sign(output)
+        g_est_negative = Variable(compute_g(base.data, A, E, G, q))
+
+        # loss = nn.L1Loss()(h_est, g_est)
+        # loss.backward()
+
+        optimiser.step()
+
+        print("{0} - {1}".format(epoch, loss.data[0]))
+
+        #
+        #
+        # plt.plot(sample[0,:,0].numpy(), sample[0,:,1].numpy(),'+')
+        # plt.plot(sample[1,:,0].numpy(), sample[1,:,1].numpy(),'+')
+        #
+        # plt.pause(0.01)
+        # plt.clf()

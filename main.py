@@ -18,16 +18,16 @@ import matplotlib.pyplot as plt
 plt.style.use('ggplot')
 plt.ion()
 
-import mlp, data#, mmd
+import mlp, data, util
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', help='cifar10 | lsun | imagenet | folder | lfw ')
 parser.add_argument('--dataroot', help='path to dataset')
-parser.add_argument('--batch_size', type=int, default=100, help='input batch size')
-parser.add_argument('--input_size', type=int, default=28, help='the height / width of the input image to network')
+parser.add_argument('--batch_size', type=int, default=10, help='input batch size')
+parser.add_argument('--input_size', type=int, default=2, help='the height / width of the input image to network')
 parser.add_argument('--nz', type=int, default=100, help='size of the latent z vector')
-parser.add_argument('--feature_size', type=int, default=256)
-parser.add_argument('--niter', type=int, default=500, help='number of epochs to train for')
+parser.add_argument('--feature_size', type=int, default=10)
+parser.add_argument('--niter', type=int, default=100, help='number of epochs to train for')
 parser.add_argument('--lr', type=float, default=0.00001, help='learning rate for Generator, default=0.00005')
 parser.add_argument('--cuda'  , action='store_true', help='enables cuda')
 parser.add_argument('--clamp_lower', type=float, default=-0.01)
@@ -76,17 +76,17 @@ def weights_init(m):
 
 generator = mlp.Generator(opt.input_size, nz, feature_size)
 generator.apply(weights_init)
-print(generator)
+# print(generator)
 
 critic = mlp.Critic(opt.input_size, nz, feature_size)
 critic.apply(weights_init)
-print(critic)
+# print(critic)
 
 # dataset = data.Circle2D(opt)
 dataset = data.BiModalNormal(opt)
 # dataset = data.MultiModalNormal(opt)
 
-util.hdml(dataset)
+util.hdml(opt, dataset)
 sys.exit()
 
 noise = torch.FloatTensor(opt.batch_size, nz)

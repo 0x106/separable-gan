@@ -134,3 +134,21 @@ class ClassifierEncoder(nn.Module):
 		binary = torch.round(nn.Sigmoid()(encoded))
 
 		return binary, decoded
+
+class HammingEncoder(nn.Module):
+	def __init__(self, input_size, nz, feature_size):
+		super(HammingEncoder, self).__init__()
+
+		self.encoder = nn.Sequential(
+			nn.Linear(input_size, feature_size),
+			nn.ReLU(True),
+			nn.Linear(feature_size, feature_size*2),
+			nn.ReLU(True),
+			nn.Linear(feature_size*2, feature_size),
+		)
+
+	def forward(self, x):
+
+		x = self.encoder(x)
+		# binary = torch.round(nn.Sigmoid()(x))
+		return x
