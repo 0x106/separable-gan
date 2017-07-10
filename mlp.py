@@ -140,15 +140,16 @@ class HammingEncoder(nn.Module):
 		super(HammingEncoder, self).__init__()
 
 		self.encoder = nn.Sequential(
-			nn.Linear(input_size, feature_size),
+			nn.Linear(input_size, 64),
 			nn.ReLU(True),
-			nn.Linear(feature_size, feature_size*2),
+			nn.Linear(64, 128),
 			nn.ReLU(True),
-			nn.Linear(feature_size*2, feature_size),
+			nn.Linear(128, 256),
+			nn.ReLU(True),
+			nn.Linear(256, feature_size)
 		)
 
 	def forward(self, x):
 
 		x = self.encoder(x)
-		# binary = torch.round(nn.Sigmoid()(x))
 		return x

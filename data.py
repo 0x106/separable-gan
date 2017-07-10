@@ -114,8 +114,7 @@ class BiModalNormal(object):
 		self.vars = [0.5, 0.5]
 
 		self.sample = torch.FloatTensor(2, self.arg.batch_size, self.arg.input_size).fill_(0)
-
-		self.sample = torch.FloatTensor(3, self.arg.batch_size, self.arg.input_size).fill_(0)
+		self.triplet = torch.FloatTensor(3, self.arg.batch_size, self.arg.input_size).fill_(0)
 
 	def __len__(self):
 		return self.arg.M
@@ -135,6 +134,8 @@ class BiModalNormal(object):
 	def next_triplet(self):
 
 		label = np.random.randint(2)
+
+		# print(label, 1 - label)
 
 		self.triplet[0].normal_(self.means[label], self.vars[label])
 		self.triplet[1].normal_(self.means[label], self.vars[label])
