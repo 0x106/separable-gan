@@ -155,6 +155,8 @@ def random_projection():
 
 def compute_g(h, hp, hn, A, E, G, q):
 
+	loss = 0
+
 	# every element of the batch
 	for i in range(h.size(0)):
 		F = torch.cat(((h[i].data).unsqueeze(0), (hp[i].data).unsqueeze(0), (hn[i].data).unsqueeze(0)), 0)
@@ -162,21 +164,24 @@ def compute_g(h, hp, hn, A, E, G, q):
 
 		config = C.max(1)[1]
 
+		loss += C.max(1)[0].sum()
+
 		for k in range(q):
 			G[:,i,k].copy_(A[config[k]])
 
-	return Variable(G[0]), Variable(G[1]), Variable(G[2])
+	loss = loss / (h.size(0)*h.size(1))
+
+	return Variable(G[0]), Variable(G[1]), Variable(G[2]), loss
 
 def triplet_loss(a,b,c):
-
-	loss = (a.ne(b)).sum() - (a.ne(c)).sum() #+ 1
+	loss = ((a.ne(b)).float().sum() - (a.ne(c)).float().sum() ) / (a.size(0)*a.size(1))#+ 1
 	return loss
 
 def hdml(arg, dataset):
 	plt.ion()
 
 	network = mlp.HammingEncoder(int(arg.input_size), int(arg.nz), int(arg.feature_size))
-	optimiser = optim.Adam(network.parameters(), lr = arg.lr)
+	optimiser = optim.Adam(network.parameters(), lr = arg.lr, weight_decay=0.001)
 
 	print(network)
 
@@ -200,60 +205,71 @@ def hdml(arg, dataset):
 	E = (E[0].unsqueeze(0)).expand_as(E)
 
 	logs = [[], []]
-
+	
 	for epoch in range(arg.niter):
 
 		network.zero_grad()
 
 		triplet = dataset.next_triplet()
 
-		# print(triplet.size())
-
-		# plt.plot(triplet[0,:,0].numpy(), triplet[0,:,1].numpy(), '+')
-		# plt.plot(triplet[1,:,0].numpy(), triplet[1,:,1].numpy(), '+')
-		# plt.plot(triplet[2,:,0].numpy(), triplet[2,:,1].numpy(), '+')
-		# plt.pause(0.2)
-		# plt.clf()
-
+		# outputs
 		b = network(Variable(triplet[0]))
 		bp = network(Variable(triplet[1]))
 		bn = network(Variable(triplet[2]))
 
+		# binary codes
 		h = torch.sign(b)
 		hp = torch.sign(bp)
 		hn = torch.sign(bn)
 
-		g, gp, gn = compute_g(b, bp, bn, A, E, G, q)
+		# upper bound
+		g, gp, gn, g_loss_ = compute_g(b, bp, bn, A, E, G, q)
 
-		h_loss = triplet_loss(h, hp, hn) + 1
-		g_loss = triplet_loss(g, gp, gn) - 1
+		# empirical losses
+		h_loss = triplet_loss(h, hp, hn) #+ arg.batch_size
+		g_loss = triplet_loss(g, gp, gn) + g_loss_ #+ arg.batch_size
 
-		b.backward((h-g).data)
-		bp.backward((hp-gp).data)
-		bn.backward((hn-gn).data)
+		# regularisation
+		regu = 0.5 * torch.pow((b.mean() + bp.mean() + bn.mean()), 2)
+		regu = torch.FloatTensor(1).expand_as(h).fill_(regu.data[0])
+
+		b.backward(-(h-g).data - regu)
+		bp.backward(-(hp-gp).data - regu)
+		bn.backward(-(hn-gn).data - regu)
 
 		optimiser.step()
 
 		logs[0].append(h_loss.data[0])
 		logs[1].append(g_loss.data[0])
 
-		# print("{0} {1} {2}".format(epoch, h_loss.data[0], g_loss.data[0]))
+		print("{0} {1} {2}".format(epoch, h_loss.data[0], g_loss.data[0]))
 
-		if epoch % 10 == 1:
+		if epoch % 100 == 0:
 			plt.plot(logs[0])
 			plt.plot(logs[1])
 			plt.pause(0.000001)
 			plt.clf()
 
-		print str(triplet[0,0,0]) + " " + str(triplet[0,0,1]) + " " + \
-				  str(triplet[1,0,0]) + " " + str(triplet[1,0,1]) + " " + \
-				  str(triplet[2,0,0]) + " " + str(triplet[2,0,1])
+	triplet = dataset.next_triplet()
 
-		print(h[0].data.unsqueeze(1).transpose(1,0))
-		print(hp[0].data.unsqueeze(1).transpose(1,0))
-		print(hn[0].data.unsqueeze(1).transpose(1,0))
-		print(g[0].data.unsqueeze(1).transpose(1,0))
-		print(gp[0].data.unsqueeze(1).transpose(1,0))
-		print(gn[0].data.unsqueeze(1).transpose(1,0))
+	# outputs
+	b = torch.sign(network(Variable(triplet[0])))
+	bp = torch.sign(network(Variable(triplet[1])))
+	bn = torch.sign(network(Variable(triplet[2])))
 
-		print('----------------------------------------')
+	print(b.mean(0))
+	print(bp.mean(0))
+	print(bn.mean(0))
+
+	from sklearn.manifold import TSNE
+
+	tsne_model = TSNE(n_components=2, random_state=0)
+	np.set_printoptions(suppress=True)
+
+	codes = torch.cat((b, bp, bn), 0)
+	output = tsne_model.fit_transform(codes.data.numpy())
+
+	plt.plot(output[:100,0], output[:100,1], '+')
+	plt.plot(output[100:200,0], output[100:200,1], '+')
+	plt.plot(output[200:300,0], output[200:300,1], '+')
+	plt.pause(1000)
